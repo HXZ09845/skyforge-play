@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#07151c">
-<meta name="description" content="SKYFORGE 3D 战机试炼。免安装，拾取装备，选择改装，挑战首领。手机横屏触控，电脑键鼠操作。">
+<meta name="description" content="SKYFORGE 3D 战机试炼。免安装，拾取装备，选择改装，闯过三关，挑战三名首领。手机横屏触控，电脑键鼠操作。">
 <title>SKYFORGE · 点开即玩</title>
 <style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#07151c;color:#e7f4ff;font-family:system-ui,-apple-system,"PingFang SC",sans-serif;overflow:hidden;overscroll-behavior:none}body{touch-action:none}#canvas{width:100%;height:100%;display:block;outline:none}#loading,#rotate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#07151c;z-index:3;padding:24px}#rotate{display:none;z-index:5}.card{width:min(480px,100%);text-align:center}.brand{letter-spacing:.3em;color:#79d9ff;font-size:15px}h1{font-size:clamp(25px,5vw,36px);margin:20px 0 14px;font-weight:600}p{color:#9fbbcb;line-height:1.65;font-size:16px;margin:12px 0}progress{width:100%;height:8px;accent-color:#79d9ff;margin:20px 0}button,.link{border:1px solid #46778a;border-radius:12px;background:#79d9ff;color:#072331;font:inherit;font-weight:600;min-height:48px;padding:12px 22px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.secondary{background:transparent;color:#cbe8f4}#start{width:100%;margin-top:14px}#retry{display:none;margin-top:16px}#error{color:#ffbac8}#tools{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));display:flex;gap:7px;z-index:2}#tools button{min-height:30px;padding:5px 10px;font-size:12px;background:#0c2430d9;color:#b7d9e9;border-radius:7px}#copied{position:fixed;bottom:55px;left:50%;transform:translateX(-50%);color:#e7f4ff;background:#123a49;padding:10px 16px;border-radius:8px;z-index:6;display:none}.phone{width:70px;height:120px;border:3px solid #79d9ff;border-radius:15px;margin:0 auto 28px;transform:rotate(90deg)}#loading[hidden]{display:none}.fine{font-size:13px;color:#789aac}a{color:#79d9ff}
@@ -108,10 +108,10 @@ if (touch && !embedded) {
  frame.src = frameURL.href;
  viewport.appendChild(frame);
 } else {
-const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":202800,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":227964,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 // Keep a cached older game pack from being paired with a newer shell.
 const packPath = config.mainPack || `${config.executable}.pck`;
-config.mainPack = `${packPath}?v=20260908.3`;
+config.mainPack = `${packPath}?v=20260908.4`;
 config.fileSizes = { ...(config.fileSizes || {}), [config.mainPack]: config.fileSizes?.[packPath] };
 if (touch) config.args = [...(config.args || []), '--', '--touch'];
 const loading = document.getElementById('loading');
