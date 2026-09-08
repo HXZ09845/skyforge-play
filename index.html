@@ -14,6 +14,16 @@
 #game-frame{position:absolute;left:50%;top:50%;border:0;display:block;transform-origin:center;background:#07151c}
 #rotate .actions{display:grid;gap:12px;max-width:320px;margin:24px auto 0}
 #rotate .phone{margin-bottom:40px}#rotate .fine{max-width:320px;margin:14px auto}
+body{touch-action:manipulation}#canvas,#mobile-viewport{touch-action:none}
+#loading,#rotate{overflow-y:auto;touch-action:pan-y}#loading .card,#rotate .card{margin:auto}
+@media(max-height:420px){
+ #loading{padding:12px 24px;align-items:flex-start}
+ #loading h1{font-size:26px;margin:10px 0}
+ #loading p{font-size:14px;margin:8px 0}
+ #loading progress{margin:10px 0}
+ #loading #start{min-height:44px;padding:8px 16px;margin-top:8px}
+ #loading .fine{font-size:12px}
+}
 </style>
 <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
@@ -31,7 +41,6 @@
 <div id="rotate"><div class="card"><div class="phone"></div><h1>横屏玩，准备起飞</h1><p>左侧摇杆移动 · 自动锁敌射击<br>右侧按钮释放电磁爆发</p><div class="actions"><button id="rotate-play">直接横屏玩</button><button id="rotate-fullscreen" class="secondary">尝试系统全屏</button></div><p class="fine">手机不能自动旋转？点「直接横屏玩」，网页会将画面转向。将手机顶部朝左握持即可。</p></div></div>
 <div id="tools"><button id="share" aria-label="分享游戏链接">分享</button><button id="fullscreen" aria-label="全屏游戏">全屏</button></div>
 <div id="copied" role="status"></div><noscript>请开启浏览器 JavaScript 后游玩。</noscript>
-<script src="index.js"></script>
 <script>
 'use strict';
 const query = new URLSearchParams(location.search);
@@ -99,9 +108,12 @@ if (touch && !embedded) {
  frame.src = frameURL.href;
  viewport.appendChild(frame);
 } else {
-const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":234464,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":234688,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+// Keep a cached older game pack from being paired with a newer shell.
+const packPath = config.mainPack || `${config.executable}.pck`;
+config.mainPack = `${packPath}?v=20260908.2`;
+config.fileSizes = { ...(config.fileSizes || {}), [config.mainPack]: config.fileSizes?.[packPath] };
 if (touch) config.args = [...(config.args || []), '--', '--touch'];
-const engine = new Engine(config);
 const loading = document.getElementById('loading');
 const start = document.getElementById('start');
 const status = document.getElementById('status');
@@ -109,6 +121,12 @@ const progress = document.getElementById('progress');
 const retry = document.getElementById('retry');
 let running = false;
 let ready = false;
+let failed = false;
+let engine;
+let slowLoadTimer;
+window.skyforgeSetPlaying = playing => {
+ document.getElementById('tools').style.display = touch && playing ? 'none' : 'flex';
+};
 if (touch) document.getElementById('controls').textContent = '手机横屏 · 左侧摇杆移动 · 右侧技能清弹';
 function pauseGame() { if (running && typeof window.skyforgePause === 'function') window.skyforgePause(); }
 addEventListener('blur', pauseGame);
@@ -117,6 +135,7 @@ async function fullscreen() {
  try {
   if (embedded && typeof window.parent.skyforgeFullscreen === 'function') { await window.parent.skyforgeFullscreen(); return; }
   if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+  else if (!document.fullscreenElement) toast('当前浏览器不支持全屏，可继续在页面内游玩。');
  } catch (_) { toast('当前浏览器不支持全屏，可继续在页面内游玩。'); }
 }
 document.getElementById('fullscreen').onclick = fullscreen;
@@ -127,12 +146,27 @@ document.getElementById('share').onclick = async () => {
  catch (error) { if (error.name !== 'AbortError') toast('请复制浏览器地址栏的链接，发给朋友。'); }
 };
 retry.onclick = () => location.reload();
-function failure(error) {
+function failure(error, unsupported = false) {
+ clearTimeout(slowLoadTimer);
  console.error(error);
+ ready = false;
+ running = false;
+ failed = true;
+ window.skyforgeSetPlaying(false);
  loading.hidden = false;
+ progress.hidden = true;
  status.textContent = '暂时无法进入游戏';
- document.getElementById('error').textContent = '请用最新版 Safari 或 Chrome 打开。若在抖音内打不开，可复制链接到系统浏览器。';
+ document.getElementById('error').textContent = unsupported
+  ? '当前浏览器不支持游戏所需的 3D 功能。请用最新版 Safari 或 Chrome 打开。'
+  : '游戏文件未能加载完成，请检查网络后重新加载。若在抖音内打不开，可复制链接到系统浏览器。';
  start.hidden = true; retry.style.display = 'inline-block';
+}
+function watchLoading() {
+ clearTimeout(slowLoadTimer);
+ slowLoadTimer = setTimeout(() => {
+  status.textContent = '加载较慢，可继续等待或重试';
+  retry.style.display = 'inline-block';
+ }, 20000);
 }
 start.onclick = () => {
  if (!ready) return;
@@ -140,13 +174,46 @@ start.onclick = () => {
  document.getElementById('canvas').focus();
  if (touch && navigator.maxTouchPoints > 0) fullscreen();
 };
-const missing = Engine.getMissingFeatures({ threads: false });
-if (missing.length) { failure(new Error(missing.join(', '))); }
+function startEngine() {
+ try {
+  const missing = Engine.getMissingFeatures({ threads: false });
+  if (missing.length) { failure(new Error(missing.join(', ')), true); return; }
+  engine = new Engine(config);
+  let downloaded = -1;
+  engine.startGame({
+   onProgress(current, total) {
+    if (ready || failed) return;
+    // Godot may report the same counters repeatedly while a request is stuck.
+    if (current !== downloaded) {
+     downloaded = current;
+     watchLoading();
+     retry.style.display = 'none';
+     if (total > 0) { progress.max = total; progress.value = current; status.textContent = `正在加载 ${Math.min(100, Math.round(current / total * 100))}%`; }
+    }
+   },
+   onExit(code) { failure(new Error('Game exited: ' + code)); }
+  }).then(() => {
+   if (failed) return;
+   clearTimeout(slowLoadTimer);
+   ready = true; start.disabled = false; start.textContent = '进入空域';
+   status.textContent = '准备就绪'; progress.value = progress.max || 1;
+   retry.style.display = 'none';
+  }).catch(failure);
+ } catch (error) { failure(error); }
+}
+watchLoading();
+if (typeof Engine === 'function') startEngine();
 else {
- engine.startGame({
-  onProgress(current, total) { if (total > 0) { progress.max = total; progress.value = current; status.textContent = `正在加载 ${Math.min(100, Math.round(current / total * 100))}%`; } },
-  onExit(code) { if (code !== 0) failure(new Error('Game exited: ' + code)); }
-}).then(() => { ready = true; start.disabled = false; start.textContent = '进入空域'; status.textContent = '准备就绪'; progress.value = progress.max || 1; }).catch(failure);
+ // Load asynchronously so a failed/slow engine script cannot prevent the
+ // orientation buttons, status message and reload action from initializing.
+ const script = document.createElement('script');
+ script.src = 'index.js';
+ script.onload = () => {
+  if (typeof Engine === 'function') startEngine();
+  else failure(new Error('Game engine did not initialize'));
+ };
+ script.onerror = () => failure(new Error('Game engine download failed'));
+ document.head.appendChild(script);
 }
 }
 </script>
