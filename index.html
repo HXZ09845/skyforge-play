@@ -9,6 +9,12 @@
 <style>
 *{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;background:#07151c;color:#e7f4ff;font-family:system-ui,-apple-system,"PingFang SC",sans-serif;overflow:hidden;overscroll-behavior:none}body{touch-action:none}#canvas{width:100%;height:100%;display:block;outline:none}#loading,#rotate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#07151c;z-index:3;padding:24px}#rotate{display:none;z-index:5}.card{width:min(480px,100%);text-align:center}.brand{letter-spacing:.3em;color:#79d9ff;font-size:15px}h1{font-size:clamp(25px,5vw,36px);margin:20px 0 14px;font-weight:600}p{color:#9fbbcb;line-height:1.65;font-size:16px;margin:12px 0}progress{width:100%;height:8px;accent-color:#79d9ff;margin:20px 0}button,.link{border:1px solid #46778a;border-radius:12px;background:#79d9ff;color:#072331;font:inherit;font-weight:600;min-height:48px;padding:12px 22px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.secondary{background:transparent;color:#cbe8f4}#start{width:100%;margin-top:14px}#retry{display:none;margin-top:16px}#error{color:#ffbac8}#tools{position:fixed;right:max(12px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));display:flex;gap:7px;z-index:2}#tools button{min-height:30px;padding:5px 10px;font-size:12px;background:#0c2430d9;color:#b7d9e9;border-radius:7px}#copied{position:fixed;bottom:55px;left:50%;transform:translateX(-50%);color:#e7f4ff;background:#123a49;padding:10px 16px;border-radius:8px;z-index:6;display:none}.phone{width:70px;height:120px;border:3px solid #79d9ff;border-radius:15px;margin:0 auto 28px;transform:rotate(90deg)}#loading[hidden]{display:none}.fine{font-size:13px;color:#789aac}a{color:#79d9ff}
 </style>
+<style>
+#mobile-viewport{position:fixed;inset:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+#game-frame{position:absolute;left:50%;top:50%;border:0;display:block;transform-origin:center;background:#07151c}
+#rotate .actions{display:grid;gap:12px;max-width:320px;margin:24px auto 0}
+#rotate .phone{margin-bottom:40px}#rotate .fine{max-width:320px;margin:14px auto}
+</style>
 <link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 
@@ -22,15 +28,78 @@
 <p id="error" role="alert"></p><button id="start" disabled>正在加载</button><button id="retry" class="secondary">重新加载</button>
 <p class="fine">免安装，无需注册。首次加载需要下载游戏资源。</p>
 </div></div>
-<div id="rotate"><div class="card"><div class="phone"></div><h1>横过手机，准备起飞</h1><p>左侧摇杆移动 · 自动锁敌射击<br>右侧按钮释放电磁爆发</p><p class="fine">请关闭手机的竖屏方向锁定。</p><button id="rotate-fullscreen">尝试全屏横屏</button></div></div>
+<div id="rotate"><div class="card"><div class="phone"></div><h1>横屏玩，准备起飞</h1><p>左侧摇杆移动 · 自动锁敌射击<br>右侧按钮释放电磁爆发</p><div class="actions"><button id="rotate-play">直接横屏玩</button><button id="rotate-fullscreen" class="secondary">尝试系统全屏</button></div><p class="fine">手机不能自动旋转？点「直接横屏玩」，网页会将画面转向。将手机顶部朝左握持即可。</p></div></div>
 <div id="tools"><button id="share" aria-label="分享游戏链接">分享</button><button id="fullscreen" aria-label="全屏游戏">全屏</button></div>
 <div id="copied" role="status"></div><noscript>请开启浏览器 JavaScript 后游玩。</noscript>
 <script src="index.js"></script>
 <script>
 'use strict';
-const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":234464,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 const query = new URLSearchParams(location.search);
 const touch = navigator.maxTouchPoints > 0 || query.has('touch');
+const embedded = window.parent !== window && query.get('skyforge-frame') === '1';
+let toastTimer;
+function toast(message) { const node = document.getElementById('copied'); node.textContent = message; node.style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => node.style.display = 'none', 4200); }
+
+if (touch && !embedded) {
+ // Rotate an iframe, not the Godot canvas: the browser maps both touch fingers
+ // into the frame's landscape coordinates, including drags and menu clicks.
+ document.getElementById('canvas').style.display = 'none';
+ document.getElementById('loading').hidden = true;
+ document.getElementById('tools').style.display = 'none';
+ const viewport = document.createElement('div');
+ viewport.id = 'mobile-viewport';
+ const frame = document.createElement('iframe');
+ frame.id = 'game-frame';
+ frame.title = 'SKYFORGE 横屏游戏';
+ frame.allow = 'autoplay; fullscreen';
+ frame.allowFullscreen = true;
+ const frameURL = new URL(location.href);
+ frameURL.searchParams.set('skyforge-frame', '1');
+ frameURL.searchParams.set('touch', '1');
+ let webLandscape = false;
+ let lastPortrait;
+ function pauseFrame() {
+  if (typeof frame.contentWindow?.skyforgePause === 'function') frame.contentWindow.skyforgePause();
+ }
+ function layoutFrame() {
+  const width = viewport.clientWidth;
+  const height = viewport.clientHeight;
+  const portrait = height > width;
+  if (lastPortrait !== undefined && portrait !== lastPortrait) pauseFrame();
+  lastPortrait = portrait;
+  frame.style.width = (portrait ? height : width) + 'px';
+  frame.style.height = (portrait ? width : height) + 'px';
+  frame.style.transform = 'translate(-50%, -50%)' + (portrait ? ' rotate(90deg)' : '');
+  document.getElementById('rotate').style.display = portrait && !webLandscape ? 'flex' : 'none';
+ }
+ function playLandscape() {
+  webLandscape = true;
+  layoutFrame();
+  frame.focus();
+ }
+ window.skyforgeFullscreen = async () => {
+  // Make progress before optional system APIs: rejection or a hung permission
+  // request must never leave the player stuck behind the orientation card.
+  playLandscape();
+  try {
+   if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+   if (screen.orientation?.lock) await screen.orientation.lock('landscape');
+  } catch (_) { /* The webpage landscape view is already active. */ }
+  layoutFrame();
+ };
+ document.getElementById('rotate-play').onclick = playLandscape;
+ document.getElementById('rotate-fullscreen').onclick = window.skyforgeFullscreen;
+ addEventListener('resize', layoutFrame);
+ document.addEventListener('fullscreenchange', layoutFrame);
+ document.addEventListener('visibilitychange', () => { if (document.hidden) pauseFrame(); });
+ document.body.appendChild(viewport);
+ layoutFrame();
+ // Size before navigation, and set src before attaching to avoid an extra
+ // about:blank document during startup.
+ frame.src = frameURL.href;
+ viewport.appendChild(frame);
+} else {
+const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":234464,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 if (touch) config.args = [...(config.args || []), '--', '--touch'];
 const engine = new Engine(config);
 const loading = document.getElementById('loading');
@@ -40,21 +109,17 @@ const progress = document.getElementById('progress');
 const retry = document.getElementById('retry');
 let running = false;
 let ready = false;
-let toastTimer;
 if (touch) document.getElementById('controls').textContent = '手机横屏 · 左侧摇杆移动 · 右侧技能清弹';
-function toast(message) { const node = document.getElementById('copied'); node.textContent = message; node.style.display = 'block'; clearTimeout(toastTimer); toastTimer = setTimeout(() => node.style.display = 'none', 4200); }
 function pauseGame() { if (running && typeof window.skyforgePause === 'function') window.skyforgePause(); }
-function orientationChanged() { const portrait = touch && innerHeight > innerWidth; document.getElementById('rotate').style.display = portrait ? 'flex' : 'none'; if (portrait) pauseGame(); }
-addEventListener('resize', orientationChanged);
 addEventListener('blur', pauseGame);
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
-orientationChanged();
 async function fullscreen() {
- try { if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen(); if (touch && screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }
- catch (_) { if (innerHeight > innerWidth) toast('请手动横过手机，继续游戏。'); }
+ try {
+  if (embedded && typeof window.parent.skyforgeFullscreen === 'function') { await window.parent.skyforgeFullscreen(); return; }
+  if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+ } catch (_) { toast('当前浏览器不支持全屏，可继续在页面内游玩。'); }
 }
 document.getElementById('fullscreen').onclick = fullscreen;
-document.getElementById('rotate-fullscreen').onclick = fullscreen;
 document.getElementById('share').onclick = async () => {
  pauseGame();
  const url = new URL(location.href); url.search = ''; url.hash = '';
@@ -81,7 +146,8 @@ else {
  engine.startGame({
   onProgress(current, total) { if (total > 0) { progress.max = total; progress.value = current; status.textContent = `正在加载 ${Math.min(100, Math.round(current / total * 100))}%`; } },
   onExit(code) { if (code !== 0) failure(new Error('Game exited: ' + code)); }
- }).then(() => { ready = true; start.disabled = false; start.textContent = '进入空域'; status.textContent = '准备就绪'; progress.value = progress.max || 1; }).catch(failure);
+}).then(() => { ready = true; start.disabled = false; start.textContent = '进入空域'; status.textContent = '准备就绪'; progress.value = progress.max || 1; }).catch(failure);
+}
 }
 </script>
 </body>
