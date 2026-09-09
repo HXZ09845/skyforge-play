@@ -111,7 +111,7 @@ if (touch && !embedded) {
 const config = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":240556,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
 // Keep a cached older game pack from being paired with a newer shell.
 const packPath = config.mainPack || `${config.executable}.pck`;
-config.mainPack = `${packPath}?v=20260909.1`;
+config.mainPack = `${packPath}?v=20260909.2`;
 config.fileSizes = { ...(config.fileSizes || {}), [config.mainPack]: config.fileSizes?.[packPath] };
 if (touch) config.args = [...(config.args || []), '--', '--touch'];
 const loading = document.getElementById('loading');
